@@ -18,9 +18,9 @@ decisions for the conditional optimizations.
 | --- | --- | --- |
 | 1. Runtime measurement | Native profiling complete; serving trace/HTTP tools in #509 | Full engine/mask/ANE timeline and repeatable workload results |
 | 2. Greedy MoE prefixes | Implemented and locally tested in #507 | Expanded formats/contexts and repeatable HTTP qualification |
-| 3. Pending-tape GDN pruning | Experiment pending | Recurrence/state correctness and whole-cycle benefit |
+| 3. Pending-tape GDN pruning | Experiment complete in draft #511; correctness passes, speed gate not met | Keep off; other hardware remains unexecuted |
 | 4. Cost-aware policy | Fixed sweeps complete; adaptive evaluation pending | Held-out comparison with the best fixed policy; coordinate with #487 |
-| 5. Host overhead | Native gap measured; engine-level experiment pending | Serving gain from safe reuse/preparation changes |
+| 5. Host overhead | Allocation experiment and serving repeats complete; no qualified gain | Retain baseline; larger reuse/overlap deferred by measured gate |
 | 6. Mixed prefill/decode | Measurement and estimator experiment pending | Contended latency/throughput and fairness checks |
 
 Only this M5 Pro is available for local runs. Other GPU families will receive
