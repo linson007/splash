@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <deque>
+#include <initializer_list>
 #include <span>
 #include <string>
 #include <type_traits>
@@ -35,18 +36,33 @@ public:
     push(std::move(pipeline), std::move(buffers), groups, threads);
   }
 
+  // Most operators bind a fixed list. Copy its buffer handles directly
+  // into the owned dispatch, without first allocating a temporary vector.
+  void add(std::string pipeline, std::initializer_list<MetalBuffer> buffers,
+           DispatchSize groups, DispatchSize threads = {kDefaultThreads, 1, 1}) {
+    push(std::move(pipeline), std::span(buffers), groups, threads);
+  }
+
+  template <class Params>
+  void add(std::string pipeline, std::initializer_list<MetalBuffer> buffers,
+           const Params &params, DispatchSize groups,
+           DispatchSize threads = {kDefaultThreads, 1, 1}) {
+    bindParams(push(std::move(pipeline), std::span(buffers), groups, threads), params);
+  }
+
+  template <class Params>
+  void add(std::string pipeline, std::initializer_list<MetalBuffer> buffers,
+           const Params &params, DispatchSize groups, IndirectGrid grid,
+           DispatchSize threads) {
+    add(std::move(pipeline), buffers, params, groups, threads);
+    dispatches_.back().indirectThreadgroups = std::move(grid);
+  }
+
   template <class Params>
   void add(std::string pipeline, std::vector<MetalBuffer> buffers,
            const Params &params, DispatchSize groups,
            DispatchSize threads = {kDefaultThreads, 1, 1}) {
-    static_assert(std::is_trivially_copyable_v<Params>,
-                  "dispatch parameters must be plain data");
-    payloads_.emplace_back(sizeof(Params));
-    std::memcpy(payloads_.back().data(), &params, sizeof(Params));
-    ComputeDispatch &dispatch =
-        push(std::move(pipeline), std::move(buffers), groups, threads);
-    dispatch.bytes.push_back({static_cast<uint32_t>(dispatch.buffers.size()),
-                              payloads_.back().data(), sizeof(Params)});
+    bindParams(push(std::move(pipeline), std::move(buffers), groups, threads), params);
   }
 
   // A dispatch of the grid in `grid`, which an earlier dispatch writes
@@ -79,7 +95,18 @@ public:
   }
 
 private:
-  ComputeDispatch &push(std::string pipeline, std::vector<MetalBuffer> buffers,
+  template <class Params>
+  void bindParams(ComputeDispatch &dispatch, const Params &params) {
+    static_assert(std::is_trivially_copyable_v<Params>,
+                  "dispatch parameters must be plain data");
+    payloads_.emplace_back(sizeof(Params));
+    std::memcpy(payloads_.back().data(), &params, sizeof(Params));
+    dispatch.bytes.push_back({static_cast<uint32_t>(dispatch.buffers.size()),
+                              payloads_.back().data(), sizeof(Params)});
+  }
+
+  template <class Buffers>
+  ComputeDispatch &push(std::string pipeline, Buffers &&buffers,
                         DispatchSize groups, DispatchSize threads) {
     ComputeDispatch dispatch;
     dispatch.pipelineName = std::move(pipeline);

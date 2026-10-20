@@ -1,5 +1,6 @@
 #include "../../../runtime/metal/BackendInstrumentation.hpp"
 #include "../../../runtime/metal/MetalBackend.hpp"
+#include "metal/CommandGraph.hpp"
 #include "TestBuffers.hpp"
 #include "TestChecks.hpp"
 
@@ -1786,6 +1787,25 @@ void run(const std::string &metallibPath) {
 
 }  // namespace
 
+// The graph must own each fixed-list handle and parameter payload after the
+// caller's list/stack expires, vector growth, and moving the graph.
+void graphOwnsFixedBindings(const std::string &metallibPath) {
+    MetalBackend backend(metallibPath);
+    auto buffer = sharedBuffer(backend, 512 * sizeof(uint32_t));
+    std::memset(buffer.contents(), 0, buffer.sizeBytes());
+    splash::metal::CommandGraph graph;
+    for (uint32_t i = 0; i < 512; ++i) {
+        struct Params { uint32_t index, value; } params{i, i + 1};
+        graph.add("test_graph_params", {buffer}, params, {1, 1, 1}, {1, 1, 1});
+    }
+    auto moved = std::move(graph);
+    (void)backend.submitCommandAsync(moved.command()).wait();
+    for (uint32_t i = 0; i < 512; ++i)
+        require(static_cast<uint32_t *>(buffer.contents())[i] == i + 1,
+                "graph lost fixed-list bindings or parameters across growth/move");
+    std::cout << "PASS graph owns fixed bindings through growth and move\n";
+}
+
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         if (argc != 2) {
@@ -1806,6 +1826,7 @@ int main(int argc, const char *argv[]) {
             shutdownSparesACommandThatCompletes(argv[1]);
             dispatchProfilingCoversEveryCommand(argv[1]);
             commandTracingPreservesExecution(argv[1]);
+            graphOwnsFixedBindings(argv[1]);
             preparedPipelinesCompileAhead(argv[1]);
             buffersStayResident(argv[1]);
             infiniteKeepAliveHoldsResidency(argv[1]);

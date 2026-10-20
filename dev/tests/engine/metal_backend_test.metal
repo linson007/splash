@@ -43,3 +43,9 @@ kernel void addressed_check_u32(device const ulong *table [[buffer(0)]],
         atomic_fetch_add_explicit(mismatches, 1u, memory_order_relaxed);
     }
 }
+
+// Checks graph-owned bindings and per-dispatch parameters after host growth.
+kernel void test_graph_params(device uint *values [[buffer(0)]],
+                              constant uint2 &params [[buffer(1)]]) {
+    values[params.x] = params.y;
+}
