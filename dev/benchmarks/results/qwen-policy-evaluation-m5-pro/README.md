@@ -69,7 +69,7 @@ metallib and tool hashes, actual counters and environment snapshots are retained
 | MLX / 8k code | 3 | 0 | 3 | 0 |
 
 The GGUF 8k code sample 2 loses **8.03% throughput** at **1.48% noise**
-(3.0% cost-regression bound after rounding). The MLX 2k prose sample 0 is
+(3.0% cost-regression bound after rounding). The MLX 2k prose sample 0 loses
 **3.95% throughput** at **1.24% noise** (2.48% bound). Those failures are outside
 the regression tolerance; positive trials cannot erase them in an aggregate.
 All 18 held-out comparisons contain differing greedy output hashes.
