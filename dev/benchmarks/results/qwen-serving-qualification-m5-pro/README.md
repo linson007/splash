@@ -34,6 +34,9 @@ to exceed `max(2%,2*noise)`; spread >5% is inconclusive. A regression `pass`
 does not mean a speed gain. All failed/noisy comparisons remain in the reports.
 
 Three 8k trials change output hashes: math sample 2 and prose samples 0 and 2.
+Some differences occur between repeats of the same policy, including the
+full-width baseline. They do not isolate a pruning effect. An exact-prompt
+single-server replay against clean main and the disabled candidate is queued.
 No output-equality claim is made for those cases, and no quality assessment is
 inferred from timing. The independent operator/model state oracles exercise
 their existing numerical contract; they do not prove every autoregressive
@@ -49,6 +52,11 @@ kernel-correctness check or a measured latency comparison. The repeat uses
 one server per complete ABBA round, matching workload and warmup histories.
 This trades a longer separation between arms for natural single-server memory
 conditions. B2–B4 follow the same single-resident method in each storage path.
+
+A power-log audit subsequently invalidated the overnight single-resident MLX
+B1 matrix because it crossed repeated sleep/dark-wake intervals. It is being
+repeated while awake, and will not count as qualification merely because a
+trial has low ABBA spread. The completed expanded GGUF B1 matrix is unaffected.
 
 The current local scope is the available machine. Other GPU-family and small
 memory qualification remain unexecuted in the repeatable maintainer package

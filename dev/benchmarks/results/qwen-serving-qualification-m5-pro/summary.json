@@ -58,5 +58,11 @@
     "prefix-mlx-b2",
     "prefix-mlx-b3",
     "prefix-mlx-b4"
+  ],
+  "excluded": [
+    {
+      "source": "final/prefix-mlx-b1-single",
+      "reason": "sleep/dark-wake transitions; see power audit"
+    }
   ]
 }

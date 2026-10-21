@@ -88,6 +88,13 @@ Warmups are outside measured deltas. Every stable gain is below the promotion
 rule `max(2%,2*noise)`; noise above 5% is inconclusive, never a pass. Neither
 series supports shipping the change for inference throughput.
 
+**Power-log audit correction:** the warmed series crossed a sleep/wake
+transition and is excluded from performance qualification in its entirety,
+including the two low-spread trials. Its raw numbers above are retained as
+historical diagnostics, not usable evidence. An awake repeat is queued with
+process-scoped sleep prevention and an elapsed UTC/awake-clock validity check.
+The initial series is unaffected. See the [audit](../qwen-serving-qualification-m5-pro/power-audit.json).
+
 The patch stays an experiment. Device-side propagation, double-buffered arenas
 and preparing a future request before acceptance would add ownership and
 invalidation work, with no established serving benefit here. Other hardware
