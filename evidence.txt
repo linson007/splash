@@ -1,0 +1,11 @@
+Splash first-time-user guidance
+
+Unedited native SwiftUI/AppKit window snapshots captured with the repository Snapshot helper.
+Before is upstream 031a25a6125af2d7acf7096580afe56eb33d65bc, with the original first-run/empty-chat harness. After is codex/first-use-guidance.
+
+The fixture uses the real catalog and a deterministic local HTTP server reporting a 1,024-token context. A small local installer script emits simulated download progress and writes fixture installation metadata; it downloads no model weights and uses no network. The test-model record reports a synthetic 1 GB size. Ports are ephemeral. These are UI checks, not real-model performance results.
+
+Windows are 1120 x 780 points, except chat-minimum-dark at 800 x 560 points. The filled example remains a draft and has not started a reply.
+
+Regenerate the after screenshots:
+SPLASH_APP_SNAPSHOTS=/tmp/splash-first-use-review swift test --package-path app --filter FirstUseSnapshots --no-parallel
