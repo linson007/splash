@@ -1,0 +1,11 @@
+Splash pending launch-options UX
+
+Unedited native SwiftUI/AppKit window snapshots from the repository Snapshot helper.
+Before uses the upstream LaunchOptions view at 031a25a6125af2d7acf7096580afe56eb33d65bc with the same fixture harness; after uses codex/pending-launch-options.
+
+The deterministic ContextFixture HTTP server reports a 1,024-token context. The installed test-model record contains no model weights. Local ports are ephemeral. These are UI checks, not real-model inference or performance results.
+
+Full windows are 1120 x 780 points. The expanded review is also rendered in isolated native Forms at 680 points wide and 540 points wide for long-value layout checks. Discarded shows the running configuration restored with the review removed.
+
+Regenerate after screenshots:
+SPLASH_APP_SNAPSHOTS=/tmp/splash-pending-review swift test --package-path app --filter PendingOptionsSnapshots --no-parallel
