@@ -1,0 +1,12 @@
+Splash native Server API connection UX
+
+Before: upstream 031a25a6125af2d7acf7096580afe56eb33d65bc, rendered with the same fixture harness before the UI change.
+After: codex/api-connection-ux.
+
+These are unedited native SwiftUI/AppKit window snapshots from the repository Snapshot helper.
+The HTTP server is the deterministic ContextFixture, with a 1,024-token context, fixture installation metadata and ephemeral local ports. No model weights or performance measurements are involved. The key example uses a synthetic key which is never rendered.
+
+Regenerate after screenshots:
+SPLASH_APP_SNAPSHOTS=/tmp/splash-api-review swift test --package-path app --filter APIConnectionSnapshots --no-parallel
+
+The app default size is 1120 by 780 points; the minimum-size window is 800 by 560 points. Expanded connection examples are isolated native Forms at 680 points wide.
