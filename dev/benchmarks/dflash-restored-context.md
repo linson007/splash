@@ -75,9 +75,10 @@ quality, and real trained-checkpoint comparisons remain unqualified.
 Recompute one report with:
 
 ```sh
+archive=dev/benchmarks/results/dflash-restored-context-m5-pro
 python -m dev.benchmarks.dflash_context_compare \
-  dev/benchmarks/results/dflash-restored-context-m5-pro/dense-2112-int8-fresh.jsonl.gz \
-  dev/benchmarks/results/dflash-restored-context-m5-pro/dense-2112-int8-restored.jsonl.gz \
+  "$archive/dense-2112-int8-fresh.jsonl.gz" \
+  "$archive/dense-2112-int8-restored.jsonl.gz" \
   --output /tmp/context-report.json
 ```
 

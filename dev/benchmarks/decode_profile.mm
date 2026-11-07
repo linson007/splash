@@ -59,6 +59,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 using namespace splash;
@@ -117,21 +118,38 @@ std::vector<uint32_t> pageRange(uint32_t first, uint32_t count) {
 
 // A chat-formatted request that asks for a long answer, so decode cycles keep
 // producing tokens instead of a stop token right after prefill. The user text
-// repeats one sentence until the prompt reaches the requested length.
-std::vector<uint32_t> chatPrompt(uint32_t tokens) {
-  static constexpr std::array<uint32_t, 3> kUserHeader{248045, 846, 198};
-  static constexpr std::array<uint32_t, 17> kSentence{
-      7734, 264, 11346, 11,    7072,  12, 26829, 8627, 883,
-      279,  3712, 314,   279,   12386, 19825, 13,    220};
-  static constexpr std::array<uint32_t, 9> kAssistantHeader{
-      248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271};
-  if (tokens < kUserHeader.size() + kAssistantHeader.size() + 1)
+// repeats one sentence, "Write a detailed, multi-paragraph essay about the
+// history of the Roman Empire. ", until the prompt reaches the requested
+// length, and the answer follows an empty think block. Its tokens are the
+// target's tokenizer's: the Qwen families' (one tokenizer) or Flint's.
+struct ChatTokens final {
+  std::vector<uint32_t> userHeader;
+  std::vector<uint32_t> sentence;
+  std::vector<uint32_t> assistantHeader;
+};
+const ChatTokens kQwenChat{
+    // <|im_start|>user\n
+    .userHeader = {248045, 846, 198},
+    .sentence = {7734, 264, 11346, 11, 7072, 12, 26829, 8627, 883, 279, 3712, 314, 279, 12386, 19825, 13, 220},
+    // <|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
+    .assistantHeader = {248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271}};
+const ChatTokens kFlintChat{
+    // <|user|>
+    .userHeader = {150003},
+    .sentence = {7421, 260, 7426, 11, 4519, 12, 41088, 6369, 762, 269, 3476, 297, 269, 10831, 18381, 13, 220},
+    // <|assistant|><think></think>
+    .assistantHeader = {150004, 150006, 150007}};
+
+std::vector<uint32_t> chatPrompt(const model::ModelDescriptor &descriptor, uint32_t tokens) {
+  const ChatTokens &chat =
+      std::holds_alternative<model::FlintLayout>(descriptor.target) ? kFlintChat : kQwenChat;
+  if (tokens < chat.userHeader.size() + chat.assistantHeader.size() + 1)
     throw std::invalid_argument("prompt is too short for a chat request");
-  std::vector<uint32_t> prompt(kUserHeader.begin(), kUserHeader.end());
-  const uint32_t body = tokens - kUserHeader.size() - kAssistantHeader.size();
+  std::vector<uint32_t> prompt = chat.userHeader;
+  const uint32_t body = tokens - chat.userHeader.size() - chat.assistantHeader.size();
   for (uint32_t index = 0; index < body; ++index)
-    prompt.push_back(kSentence[index % kSentence.size()]);
-  prompt.insert(prompt.end(), kAssistantHeader.begin(), kAssistantHeader.end());
+    prompt.push_back(chat.sentence[index % chat.sentence.size()]);
+  prompt.insert(prompt.end(), chat.assistantHeader.begin(), chat.assistantHeader.end());
   return prompt;
 }
 
@@ -303,6 +321,10 @@ std::vector<uint32_t> readPrompt(const std::string &name) {
   return tokens;
 }
 
+std::string jsonString(std::string_view text) {
+  return json::Writer().value(text).str();
+}
+
 template <class T> void jsonArray(std::ostream &file, std::span<const T> values) {
   file << '[';
   for (size_t i = 0; i < values.size(); ++i) {
@@ -363,7 +385,7 @@ void captureDraft(model::Runtime &executor, std::span<Lane> lanes,
       jsonArray(file, std::span<const uint32_t>(result.outputTokens));
       auto context = histories[lane];
       if (!result.outputTokens.empty()) context.push_back(result.outputTokens.front());
-      file << ",\"context_sha256\":" << json::quote(model::weightDigest(std::span<const uint8_t>(
+      file << ",\"context_sha256\":" << jsonString(model::weightDigest(std::span<const uint8_t>(
           reinterpret_cast<const uint8_t *>(context.data()), context.size() * sizeof(uint32_t))));
       if (hiddenCapture) {
         file << ",\"draft_hidden_bf16\":";
@@ -519,8 +541,8 @@ int main(int argc, char **argv) {
         throw std::invalid_argument("--draft-dump and --dispatch-list are separate modes");
       if (!draftDump.empty() && cycles > 1000000)
         throw std::invalid_argument("--cycles exceeds 1000000");
-      const std::vector<uint32_t> prompt = promptFile.empty() ? chatPrompt(promptTokens) : readPrompt(promptFile);
-      promptTokens = static_cast<uint32_t>(prompt.size());
+      std::vector<uint32_t> prompt = promptFile.empty() ? std::vector<uint32_t>{} : readPrompt(promptFile);
+      if (!prompt.empty()) promptTokens = static_cast<uint32_t>(prompt.size());
       if (restorePrefix && materializePrefix && restorePrefix != materializePrefix)
         throw std::invalid_argument("restore and materialize boundaries must match");
       materializePrefix = restorePrefix ? restorePrefix : materializePrefix;
@@ -542,6 +564,7 @@ int main(int argc, char **argv) {
       loadOptions.readers = std::make_shared<model::SsdReaders>(model::kSsdReaders);
       model::LoadedModel model =
           model::loadModel(backend, root, model::inspectModelRoot(root), loadOptions);
+      if (prompt.empty()) prompt = chatPrompt(model.descriptor, promptTokens);
       if (!draftDump.empty() && uint64_t{promptTokens} + outputBudget > model.maximumContextTokens())
         throw std::invalid_argument("capture prompt and output budget exceed the model context");
       ops::ExecutionPlans operators(backend.capabilities());
@@ -560,6 +583,9 @@ int main(int argc, char **argv) {
       MemoryGovernor governor(
           backend, backend.capabilities().recommendedMaxWorkingSetBytes, 1, 1,
           queryHostMemory, 0);
+      // Every allocation through the governor is for a claim: the profile's
+      // are a start's, one Floor claim for its whole run.
+      const MemoryGovernor::Scope run(governor, governor.ledger().open({.cls = ClaimClass::Floor}));
       kv::PageStorage pages(backend, governor.allocationAdmission(), kvLayout,
                             pageCount, extentPages);
       for (uint32_t extent = 0; extent < pageCount / extentPages; ++extent) {
@@ -589,20 +615,20 @@ int main(int argc, char **argv) {
         std::ofstream file(draftDump);
         if (!file) throw std::runtime_error("cannot write " + draftDump);
         file << std::setprecision(std::numeric_limits<float>::max_digits10);
-        file << "{\"kind\":\"metadata\",\"schema\":1,\"model_root\":" << json::quote(root.string())
-             << ",\"device\":" << json::quote(backend.capabilities().deviceName)
+        file << "{\"kind\":\"metadata\",\"schema\":1,\"model_root\":" << jsonString(root.string())
+             << ",\"device\":" << jsonString(backend.capabilities().deviceName)
              << ",\"width\":" << captureWidth << ",\"positions\":" << SPLASH_DRAFT_PROPOSAL_TOKENS
              << ",\"candidates\":" << SPLASH_DRAFT_CANDIDATES << ",\"sampling\":false,\"verify_rows\":"
-             << json::quote(captureVerifyRows == model::VerifyRows::All ? "all" : "auto")
+             << jsonString(captureVerifyRows == model::VerifyRows::All ? "all" : "auto")
              << ",\"presence_penalty\":" << presencePenalty
-             << ",\"model_fingerprint\":" << json::quote(model.manifestFingerprintSha256)
-             << ",\"kv_format\":" << json::quote(format == kv::Format::Int8 ? "int8" : "bf16")
-             << ",\"state_format\":" << json::quote(std::string(ops::formatName(stateFormat)))
-             << ",\"budget_learning\":" << json::quote(frozenBudget ? "frozen" : "live")
+             << ",\"model_fingerprint\":" << jsonString(model.manifestFingerprintSha256)
+             << ",\"kv_format\":" << jsonString(format == kv::Format::Int8 ? "int8" : "bf16")
+             << ",\"state_format\":" << jsonString(std::string(ops::formatName(stateFormat)))
+             << ",\"budget_learning\":" << jsonString(frozenBudget ? "frozen" : "live")
              << ",\"materialize_prefix\":" << materializePrefix
              << ",\"restore_prefix\":" << restorePrefix
              << ",\"capture_hidden\":" << (hiddenCapture ? "true" : "false")
-             << ",\"prompt_sha256\":" << json::quote(model::weightDigest(std::span<const uint8_t>(
+             << ",\"prompt_sha256\":" << jsonString(model::weightDigest(std::span<const uint8_t>(
                   reinterpret_cast<const uint8_t *>(prompt.data()), prompt.size() * sizeof(uint32_t))))
              << ",\"prompt_tokens\":" << promptTokens << "}\n";
         for (uint32_t lane = 0; lane < captureWidth; ++lane)
